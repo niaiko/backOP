@@ -1,0 +1,36 @@
+stages:
+  - build
+  - deploy
+
+build_job:
+  stage: build
+  image: maven:3-jdk-8
+  script:
+    - mvn package -DskipTests
+  artifacts:
+    paths:
+      - target/*.jar
+  tags:
+    - build-jar
+  cache:
+    paths:
+      - .m2/
+  variables:
+    MAVEN_OPTS: -Dmaven.repo.local=${CI_PROJECT_DIR}/.m2
+  only:
+    - master
+    
+deploy_job:
+  stage: deploy
+  image: docker:latest
+  services:
+    - docker:dind
+  variables:
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - apk add openssh-client
+    - apk add sshpass
+    - sshpass -p "Root#4.31" scp -o StrictHostKeyChecking=no -r target/*.jar *.sh root@192.168.4.13:/root/integration/reglement/
+    - sshpass -p "Root#4.31" ssh -o StrictHostKeyChecking=no root@192.168.4.13 "docker cp integration/reglement/*.jar cnapsdbReglement:/reglement.jar; docker cp integration/reglement/killer.sh cnapsdbReglement:/killer.sh; docker exec -i cnapsdbReglement bash killer.sh"   
+  only:
+    - master
